@@ -139,9 +139,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "f1-rs"
+name = "f1"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "lazy_static",
  "reqwest",
  "serde",
  "serde_json",
@@ -152,9 +154,8 @@ dependencies = [
 name = "f1t"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "crossterm 0.22.1",
- "f1-rs",
+ "f1",
  "tui",
 ]
 
