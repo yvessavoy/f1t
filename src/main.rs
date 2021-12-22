@@ -10,11 +10,11 @@ use crossterm::{
 use f1_rs::historical::get_season;
 use f1_rs::historical::Weekend as F1Weekend;
 use std::io;
-use tui::backend::CrosstermBackend;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Modifier, Style};
 use tui::widgets::{Block, Borders, List, ListItem, Widget};
 use tui::Terminal;
+use tui::{backend::CrosstermBackend, widgets::Paragraph};
 
 const EARLIEST_SEASON: i32 = 1950;
 
@@ -32,16 +32,28 @@ struct App {
 
 impl App {
     fn new() -> Self {
-        Self {
+        let mut seasons = StatefulList::with_items(get_available_seasons());
+        seasons.state.select(Option::Some(0));
+
+        let mut app = Self {
             screen: SelectedScreen::SeasonList,
-            seasons: StatefulList::with_items(get_available_seasons()),
+            seasons,
             weekends: StatefulList::<F1Weekend>::new(),
-        }
+        };
+
+        load_weekends_for_season(&mut app);
+        app
     }
 }
 
 fn get_available_seasons() -> Vec<i32> {
     (EARLIEST_SEASON..Utc::now().year() + 1).rev().collect()
+}
+
+fn load_weekends_for_season(app: &mut App) {
+    let selected_season = app.seasons.state.selected().unwrap_or(0);
+    app.weekends =
+        StatefulList::with_items(get_season(app.seasons.items[selected_season]).unwrap());
 }
 
 fn main() -> Result<(), io::Error> {
@@ -57,13 +69,11 @@ fn main() -> Result<(), io::Error> {
         terminal.draw(|f| {
             let root = Layout::default()
                 .direction(Direction::Vertical)
-                .margin(1)
                 .constraints([Constraint::Percentage(90), Constraint::Percentage(10)])
                 .split(f.size());
 
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .margin(1)
                 .constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref())
                 .split(root[0]);
 
@@ -101,7 +111,9 @@ fn main() -> Result<(), io::Error> {
             f.render_stateful_widget(season_list, chunks[1], &mut app.weekends.state);
 
             let block = Block::default().title("Controls").borders(Borders::ALL);
-            f.render_widget(block, root[1]);
+            let controls =
+                Paragraph::new("q = Quit, h = Left, j = Down, k = Up, l = Right").block(block);
+            f.render_widget(controls, root[1]);
         })?;
 
         if let Event::Key(key) = crossterm::event::read()? {
@@ -110,10 +122,7 @@ fn main() -> Result<(), io::Error> {
                 KeyCode::Char('j') => {
                     if app.screen == SelectedScreen::SeasonList {
                         app.seasons.next();
-                        let selected_season = app.seasons.state.selected().unwrap_or(0);
-                        app.weekends = StatefulList::with_items(
-                            get_season(app.seasons.items[selected_season]).unwrap(),
-                        );
+                        load_weekends_for_season(&mut app);
                     } else {
                         app.weekends.next();
                     }
@@ -121,10 +130,7 @@ fn main() -> Result<(), io::Error> {
                 KeyCode::Char('k') => {
                     if app.screen == SelectedScreen::SeasonList {
                         app.seasons.previous();
-                        let selected_season = app.seasons.state.selected().unwrap_or(0);
-                        app.weekends = StatefulList::with_items(
-                            get_season(app.seasons.items[selected_season]).unwrap(),
-                        );
+                        load_weekends_for_season(&mut app);
                     } else {
                         app.weekends.previous();
                     }
@@ -132,6 +138,7 @@ fn main() -> Result<(), io::Error> {
                 KeyCode::Char('h') => {
                     if app.screen == SelectedScreen::SeasonList {
                         app.screen = SelectedScreen::RaceList;
+                        app.weekends.state.select(Option::Some(0));
                     } else {
                         app.screen = SelectedScreen::SeasonList;
                     }
@@ -139,6 +146,7 @@ fn main() -> Result<(), io::Error> {
                 KeyCode::Char('l') => {
                     if app.screen == SelectedScreen::SeasonList {
                         app.screen = SelectedScreen::RaceList;
+                        app.weekends.state.select(Option::Some(0));
                     } else {
                         app.screen = SelectedScreen::SeasonList;
                     }
