@@ -1,9 +1,9 @@
+mod events;
 mod screens;
 mod util;
 
 use crate::util::StatefulList;
 use crossterm::{
-    event::{Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -11,7 +11,6 @@ use f1::historical::get_season;
 use f1::historical::Weekend as F1Weekend;
 use std::collections::HashMap;
 use std::io;
-use std::time::Duration;
 use tui::backend::CrosstermBackend;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::Terminal;
@@ -96,56 +95,8 @@ fn main() -> Result<(), io::Error> {
             screens::footer::ui(f, root[1]);
         })?;
 
-        if crossterm::event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = crossterm::event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => break,
-                    KeyCode::Char('j') => {
-                        if app.screen == SelectedScreen::SeasonList {
-                            app.seasons.next();
-                            load_weekends_for_season(&mut app, tx_trigger.clone());
-                        } else {
-                            app.weekends.get_mut(&app.current_season).unwrap().next();
-                        }
-                    }
-                    KeyCode::Char('k') => {
-                        if app.screen == SelectedScreen::SeasonList {
-                            app.seasons.previous();
-                            load_weekends_for_season(&mut app, tx_trigger.clone());
-                        } else {
-                            app.weekends
-                                .get_mut(&app.current_season)
-                                .unwrap()
-                                .previous();
-                        }
-                    }
-                    KeyCode::Char('h') => {
-                        if app.screen == SelectedScreen::SeasonList {
-                            app.screen = SelectedScreen::RaceList;
-                            app.weekends
-                                .get_mut(&app.current_season)
-                                .unwrap()
-                                .state
-                                .select(Option::Some(0));
-                        } else {
-                            app.screen = SelectedScreen::SeasonList;
-                        }
-                    }
-                    KeyCode::Char('l') => {
-                        if app.screen == SelectedScreen::SeasonList {
-                            app.screen = SelectedScreen::RaceList;
-                            app.weekends
-                                .get_mut(&app.current_season)
-                                .unwrap()
-                                .state
-                                .select(Option::Some(0));
-                        } else {
-                            app.screen = SelectedScreen::SeasonList;
-                        }
-                    }
-                    _ => (),
-                }
-            }
+        if events::handle(&mut app, &tx_trigger)? {
+            break;
         }
     }
 
