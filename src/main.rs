@@ -7,25 +7,29 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use f1::historical::get_season;
-use f1::historical::Weekend as F1Weekend;
+use f1::Weekend as F1Weekend;
+use f1::{Season, Standing};
 use std::collections::HashMap;
 use std::io;
-use tui::backend::CrosstermBackend;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::Terminal;
+use tui::{backend::CrosstermBackend, widgets::Tabs};
+use util::TabsState;
 
 #[derive(PartialEq)]
 enum SelectedScreen {
     SeasonList,
     RaceList,
+    WeekendResults,
 }
 
 pub struct App {
     screen: SelectedScreen,
     current_season: i32,
     seasons: StatefulList<i32>,
+    ranking: StatefulList<Standing>,
     weekends: HashMap<i32, StatefulList<F1Weekend>>,
+    detail_tabs: TabsState,
 }
 
 impl App {
@@ -40,6 +44,8 @@ impl App {
             screen: SelectedScreen::SeasonList,
             seasons,
             weekends: HashMap::new(),
+            detail_tabs: TabsState::new(vec![]),
+            ranking: StatefulList::new(),
         };
 
         app
@@ -66,8 +72,8 @@ fn main() -> Result<(), io::Error> {
 
     std::thread::spawn(move || loop {
         if let Ok(year) = rx_trigger.recv() {
-            let weekends = get_season(year).unwrap_or_default();
-            tx.send((year, weekends)).unwrap();
+            let season = Season::new(year).unwrap();
+            tx.send((year, season.weekends)).unwrap();
         }
     });
 
@@ -87,11 +93,27 @@ fn main() -> Result<(), io::Error> {
 
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(20), Constraint::Percentage(80)].as_ref())
+                .constraints(
+                    [
+                        Constraint::Length(10),
+                        Constraint::Percentage(60),
+                        Constraint::Percentage(40),
+                    ]
+                    .as_ref(),
+                )
                 .split(root[0]);
 
-            screens::season_list::ui(f, chunks[0], &mut app);
-            screens::weekend_list::ui(f, chunks[1], &mut app);
+            match app.screen {
+                SelectedScreen::WeekendResults => {
+                    screens::weekend_details::ui(f, chunks[1], &mut app);
+                }
+                _ => {
+                    screens::season_list::ui(f, chunks[0], &mut app);
+                    screens::weekend_list::ui(f, chunks[1], &mut app);
+                    screens::circuit::ui(f, chunks[2], &mut app);
+                }
+            }
+
             screens::footer::ui(f, root[1]);
         })?;
 
